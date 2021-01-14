@@ -3,8 +3,8 @@ const devp2p = require('../../src')
 const util = require('./util.js')
 
 const capabilities = [
-  devp2p.ETH.eth63,
-  devp2p.ETH.eth62
+  devp2p.VAP.vap63,
+  devp2p.VAP.vap62
 ]
 const CHAIN_ID = 1
 
@@ -22,17 +22,17 @@ async function delay (ms) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-test('ETH: send status message', async (t) => {
+test('VAP: send status message', async (t) => {
   const rlpxs = util.initTwoPeerRLPXSetup(null, capabilities)
 
   rlpxs[0].on('peer:added', function (peer) {
-    const eth = peer.getProtocols()[0]
-    // FIXME: ETH events are not going through here
-    /* eth.on('message', async (code, payload) => {
+    const vap = peer.getProtocols()[0]
+    // FIXME: VAP events are not going through here
+    /* vap.on('message', async (code, payload) => {
       util.destroyRLPXs(rlpxs)
       t.end()
     }) */
-    eth.sendStatus(status)
+    vap.sendStatus(status)
   })
 
   await delay(400)

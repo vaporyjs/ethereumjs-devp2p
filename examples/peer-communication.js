@@ -1,6 +1,6 @@
 const devp2p = require('../src')
-const EthereumTx = require('ethereumjs-tx')
-const EthereumBlock = require('ethereumjs-block')
+const VaporyTx = require('vaporyjs-tx')
+const VaporyBlock = require('vaporyjs-block')
 const LRUCache = require('lru-cache')
 const ms = require('ms')
 const chalk = require('chalk')
@@ -12,7 +12,7 @@ const Buffer = require('safe-buffer').Buffer
 const PRIVATE_KEY = randomBytes(32)
 const CHAIN_ID = 1
 
-const BOOTNODES = require('ethereum-common').bootstrapNodes.filter((node) => {
+const BOOTNODES = require('vapory-common').bootstrapNodes.filter((node) => {
   return node.chainId === CHAIN_ID
 }).map((node) => {
   return {
@@ -47,8 +47,8 @@ const rlpx = new devp2p.RLPx(PRIVATE_KEY, {
   dpt: dpt,
   maxPeers: 25,
   capabilities: [
-    devp2p.ETH.eth63,
-    devp2p.ETH.eth62
+    devp2p.VAP.vap63,
+    devp2p.VAP.vap62
   ],
   remoteClientIdFilter: REMOTE_CLIENTID_FILTER,
   listenPort: null
@@ -58,13 +58,13 @@ rlpx.on('error', (err) => console.error(chalk.red(`RLPx error: ${err.stack || er
 
 rlpx.on('peer:added', (peer) => {
   const addr = getPeerAddr(peer)
-  const eth = peer.getProtocols()[0]
+  const vap = peer.getProtocols()[0]
   const requests = { headers: [], bodies: [], msgTypes: {} }
 
   const clientId = peer.getHelloMessage().clientId
-  console.log(chalk.green(`Add peer: ${addr} ${clientId} (eth${eth.getVersion()}) (total: ${rlpx.getPeers().length})`))
+  console.log(chalk.green(`Add peer: ${addr} ${clientId} (vap${vap.getVersion()}) (total: ${rlpx.getPeers().length})`))
 
-  eth.sendStatus({
+  vap.sendStatus({
     networkId: CHAIN_ID,
     td: devp2p._util.int2buffer(17179869184), // total difficulty in genesis block
     bestHash: Buffer.from('d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3', 'hex'),
@@ -74,15 +74,15 @@ rlpx.on('peer:added', (peer) => {
   // check CHECK_BLOCK
   let forkDrop = null
   let forkVerified = false
-  eth.once('status', () => {
-    eth.sendMessage(devp2p.ETH.MESSAGE_CODES.GET_BLOCK_HEADERS, [ CHECK_BLOCK_NR, 1, 0, 0 ])
+  vap.once('status', () => {
+    vap.sendMessage(devp2p.VAP.MESSAGE_CODES.GET_BLOCK_HEADERS, [ CHECK_BLOCK_NR, 1, 0, 0 ])
     forkDrop = setTimeout(() => {
       peer.disconnect(devp2p.RLPx.DISCONNECT_REASONS.USELESS_PEER)
     }, ms('15s'))
     peer.once('close', () => clearTimeout(forkDrop))
   })
 
-  eth.on('message', async (code, payload) => {
+  vap.on('message', async (code, payload) => {
     if (code in requests.msgTypes) {
       requests.msgTypes[code] += 1
     } else {
@@ -90,30 +90,30 @@ rlpx.on('peer:added', (peer) => {
     }
 
     switch (code) {
-      case devp2p.ETH.MESSAGE_CODES.NEW_BLOCK_HASHES:
+      case devp2p.VAP.MESSAGE_CODES.NEW_BLOCK_HASHES:
         if (!forkVerified) break
 
         for (let item of payload) {
           const blockHash = item[0]
           if (blocksCache.has(blockHash.toString('hex'))) continue
           setTimeout(() => {
-            eth.sendMessage(devp2p.ETH.MESSAGE_CODES.GET_BLOCK_HEADERS, [ blockHash, 1, 0, 0 ])
+            vap.sendMessage(devp2p.VAP.MESSAGE_CODES.GET_BLOCK_HEADERS, [ blockHash, 1, 0, 0 ])
             requests.headers.push(blockHash)
           }, ms('0.1s'))
         }
         break
 
-      case devp2p.ETH.MESSAGE_CODES.TX:
+      case devp2p.VAP.MESSAGE_CODES.TX:
         if (!forkVerified) break
 
         for (let item of payload) {
-          const tx = new EthereumTx(item)
+          const tx = new VaporyTx(item)
           if (isValidTx(tx)) onNewTx(tx, peer)
         }
 
         break
 
-      case devp2p.ETH.MESSAGE_CODES.GET_BLOCK_HEADERS:
+      case devp2p.VAP.MESSAGE_CODES.GET_BLOCK_HEADERS:
         const headers = []
         // hack
         if (devp2p._util.buffer2int(payload[0]) === CHECK_BLOCK_NR) {
@@ -123,11 +123,11 @@ rlpx.on('peer:added', (peer) => {
         if (requests.headers.length === 0 && requests.msgTypes[code] >= 8) {
           peer.disconnect(devp2p.RLPx.DISCONNECT_REASONS.USELESS_PEER)
         } else {
-          eth.sendMessage(devp2p.ETH.MESSAGE_CODES.BLOCK_HEADERS, headers)
+          vap.sendMessage(devp2p.VAP.MESSAGE_CODES.BLOCK_HEADERS, headers)
         }
         break
 
-      case devp2p.ETH.MESSAGE_CODES.BLOCK_HEADERS:
+      case devp2p.VAP.MESSAGE_CODES.BLOCK_HEADERS:
         if (!forkVerified) {
           if (payload.length !== 1) {
             console.log(`${addr} expected one header for ${CHECK_BLOCK_TITLE} verify (received: ${payload.length})`)
@@ -136,7 +136,7 @@ rlpx.on('peer:added', (peer) => {
           }
 
           const expectedHash = CHECK_BLOCK
-          const header = new EthereumBlock.Header(payload[0])
+          const header = new VaporyBlock.Header(payload[0])
           if (header.hash().toString('hex') === expectedHash) {
             console.log(`${addr} verified to be on the same side of the ${CHECK_BLOCK_TITLE}`)
             clearTimeout(forkDrop)
@@ -149,13 +149,13 @@ rlpx.on('peer:added', (peer) => {
           }
 
           let isValidPayload = false
-          const header = new EthereumBlock.Header(payload[0])
+          const header = new VaporyBlock.Header(payload[0])
           while (requests.headers.length > 0) {
             const blockHash = requests.headers.shift()
             if (header.hash().equals(blockHash)) {
               isValidPayload = true
               setTimeout(() => {
-                eth.sendMessage(devp2p.ETH.MESSAGE_CODES.GET_BLOCK_BODIES, [ blockHash ])
+                vap.sendMessage(devp2p.VAP.MESSAGE_CODES.GET_BLOCK_BODIES, [ blockHash ])
                 requests.bodies.push(header)
               }, ms('0.1s'))
               break
@@ -169,15 +169,15 @@ rlpx.on('peer:added', (peer) => {
 
         break
 
-      case devp2p.ETH.MESSAGE_CODES.GET_BLOCK_BODIES:
+      case devp2p.VAP.MESSAGE_CODES.GET_BLOCK_BODIES:
         if (requests.headers.length === 0 && requests.msgTypes[code] >= 8) {
           peer.disconnect(devp2p.RLPx.DISCONNECT_REASONS.USELESS_PEER)
         } else {
-          eth.sendMessage(devp2p.ETH.MESSAGE_CODES.BLOCK_BODIES, [])
+          vap.sendMessage(devp2p.VAP.MESSAGE_CODES.BLOCK_BODIES, [])
         }
         break
 
-      case devp2p.ETH.MESSAGE_CODES.BLOCK_BODIES:
+      case devp2p.VAP.MESSAGE_CODES.BLOCK_BODIES:
         if (!forkVerified) break
 
         if (payload.length !== 1) {
@@ -188,7 +188,7 @@ rlpx.on('peer:added', (peer) => {
         let isValidPayload = false
         while (requests.bodies.length > 0) {
           const header = requests.bodies.shift()
-          const block = new EthereumBlock([header.raw, payload[0][0], payload[0][1]])
+          const block = new VaporyBlock([header.raw, payload[0][0], payload[0][1]])
           const isValid = await isValidBlock(block)
           if (isValid) {
             isValidPayload = true
@@ -203,35 +203,35 @@ rlpx.on('peer:added', (peer) => {
 
         break
 
-      case devp2p.ETH.MESSAGE_CODES.NEW_BLOCK:
+      case devp2p.VAP.MESSAGE_CODES.NEW_BLOCK:
         if (!forkVerified) break
 
-        const newBlock = new EthereumBlock(payload[0])
+        const newBlock = new VaporyBlock(payload[0])
         const isValidNewBlock = await isValidBlock(newBlock)
         if (isValidNewBlock) onNewBlock(newBlock, peer)
 
         break
 
-      case devp2p.ETH.MESSAGE_CODES.GET_NODE_DATA:
+      case devp2p.VAP.MESSAGE_CODES.GET_NODE_DATA:
         if (requests.headers.length === 0 && requests.msgTypes[code] >= 8) {
           peer.disconnect(devp2p.RLPx.DISCONNECT_REASONS.USELESS_PEER)
         } else {
-          eth.sendMessage(devp2p.ETH.MESSAGE_CODES.NODE_DATA, [])
+          vap.sendMessage(devp2p.VAP.MESSAGE_CODES.NODE_DATA, [])
         }
         break
 
-      case devp2p.ETH.MESSAGE_CODES.NODE_DATA:
+      case devp2p.VAP.MESSAGE_CODES.NODE_DATA:
         break
 
-      case devp2p.ETH.MESSAGE_CODES.GET_RECEIPTS:
+      case devp2p.VAP.MESSAGE_CODES.GET_RECEIPTS:
         if (requests.headers.length === 0 && requests.msgTypes[code] >= 8) {
           peer.disconnect(devp2p.RLPx.DISCONNECT_REASONS.USELESS_PEER)
         } else {
-          eth.sendMessage(devp2p.ETH.MESSAGE_CODES.RECEIPTS, [])
+          vap.sendMessage(devp2p.VAP.MESSAGE_CODES.RECEIPTS, [])
         }
         break
 
-      case devp2p.ETH.MESSAGE_CODES.RECEIPTS:
+      case devp2p.VAP.MESSAGE_CODES.RECEIPTS:
         break
     }
   })
@@ -267,7 +267,7 @@ for (let bootnode of BOOTNODES) {
   })
 }
 
-// connect to local ethereum node (debug)
+// connect to local vapory node (debug)
 /*
 dpt.addPeer({ address: '127.0.0.1', udpPort: 30303, tcpPort: 30303 })
   .then((peer) => {

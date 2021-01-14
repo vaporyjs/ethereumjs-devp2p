@@ -6,10 +6,10 @@ const createDebugLogger = require('debug')
 const { int2buffer, buffer2int, assertEq } = require('../util')
 const Peer = require('../rlpx/peer')
 
-const debug = createDebugLogger('devp2p:eth')
+const debug = createDebugLogger('devp2p:vap')
 
 const MESSAGE_CODES = {
-  // eth62
+  // vap62
   STATUS: 0x00,
   NEW_BLOCK_HASHES: 0x01,
   TX: 0x02,
@@ -19,14 +19,14 @@ const MESSAGE_CODES = {
   BLOCK_BODIES: 0x06,
   NEW_BLOCK: 0x07,
 
-  // eth63
+  // vap63
   GET_NODE_DATA: 0x0d,
   NODE_DATA: 0x0e,
   GET_RECEIPTS: 0x0f,
   RECEIPTS: 0x10
 }
 
-class ETH extends EventEmitter {
+class VAP extends EventEmitter {
   constructor (version, peer, send) {
     super()
 
@@ -41,8 +41,8 @@ class ETH extends EventEmitter {
     }, ms('5s'))
   }
 
-  static eth62 = { name: 'eth', version: 62, length: 8, constructor: ETH }
-  static eth63 = { name: 'eth', version: 63, length: 17, constructor: ETH }
+  static vap62 = { name: 'vap', version: 62, length: 8, constructor: VAP }
+  static vap63 = { name: 'vap', version: 63, length: 17, constructor: VAP }
 
   static MESSAGE_CODES = MESSAGE_CODES
 
@@ -66,14 +66,14 @@ class ETH extends EventEmitter {
       case MESSAGE_CODES.GET_BLOCK_BODIES:
       case MESSAGE_CODES.BLOCK_BODIES:
       case MESSAGE_CODES.NEW_BLOCK:
-        if (this._version >= ETH.eth62.version) break
+        if (this._version >= VAP.vap62.version) break
         return
 
       case MESSAGE_CODES.GET_NODE_DATA:
       case MESSAGE_CODES.NODE_DATA:
       case MESSAGE_CODES.GET_RECEIPTS:
       case MESSAGE_CODES.RECEIPTS:
-        if (this._version >= ETH.eth63.version) break
+        if (this._version >= VAP.vap63.version) break
         return
 
       default:
@@ -119,7 +119,7 @@ class ETH extends EventEmitter {
       status.genesisHash
     ]
 
-    debug(`Send STATUS message to ${this._peer._socket.remoteAddress}:${this._peer._socket.remotePort} (eth${this._version}): ${this._getStatusString(this._status)}`)
+    debug(`Send STATUS message to ${this._peer._socket.remoteAddress}:${this._peer._socket.remotePort} (vap${this._version}): ${this._getStatusString(this._status)}`)
     this._send(MESSAGE_CODES.STATUS, rlp.encode(this._status))
     this._handleStatus()
   }
@@ -137,14 +137,14 @@ class ETH extends EventEmitter {
       case MESSAGE_CODES.GET_BLOCK_BODIES:
       case MESSAGE_CODES.BLOCK_BODIES:
       case MESSAGE_CODES.NEW_BLOCK:
-        if (this._version >= ETH.eth62.version) break
+        if (this._version >= VAP.vap62.version) break
         throw new Error(`Code ${code} not allowed with version ${this._version}`)
 
       case MESSAGE_CODES.GET_NODE_DATA:
       case MESSAGE_CODES.NODE_DATA:
       case MESSAGE_CODES.GET_RECEIPTS:
       case MESSAGE_CODES.RECEIPTS:
-        if (this._version >= ETH.eth63.version) break
+        if (this._version >= VAP.vap63.version) break
         throw new Error(`Code ${code} not allowed with version ${this._version}`)
 
       default:
@@ -159,4 +159,4 @@ class ETH extends EventEmitter {
   }
 }
 
-module.exports = ETH
+module.exports = VAP

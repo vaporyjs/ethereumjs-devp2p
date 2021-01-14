@@ -14,9 +14,9 @@ function ecdhX (publicKey, privateKey) {
 // for sha3, blocksize is 136 bytes
 // for sha256, blocksize is 64 bytes
 // NIST SP 800-56a Concatenation Key Derivation Function (see section 5.8.1).
-// https://github.com/ethereum/pydevp2p/blob/master/devp2p/crypto.py#L295
-// https://github.com/ethereum/go-ethereum/blob/fe532a98f9f32bb81ef0d8d013cf44327830d11e/crypto/ecies/ecies.go#L165
-// https://github.com/ethereum/cpp-ethereum/blob/develop/libdevcrypto/CryptoPP.cpp#L36
+// https://github.com/vaporyco/pydevp2p/blob/master/devp2p/crypto.py#L295
+// https://github.com/vaporyco/go-vapory/blob/fe532a98f9f32bb81ef0d8d013cf44327830d11e/crypto/ecies/ecies.go#L165
+// https://github.com/vaporyco/cpp-vapory/blob/develop/libdevcrypto/CryptoPP.cpp#L36
 function concatKDF (keyMaterial, keyLength) {
   const SHA256BlockSize = 64
   const reps = ((keyLength + 7) * 8) / (SHA256BlockSize * 8)
